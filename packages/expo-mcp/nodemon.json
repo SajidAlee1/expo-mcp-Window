@@ -1,0 +1,6 @@
+{
+  "watch": ["dist"],
+  "delay": 1,
+  "exec": "node bin/expo-mcp.mjs --dev-server-url ${DEV_SERVER_URL:-http://localhost:8081}",
+  "ext": "js,mjs"
+}
