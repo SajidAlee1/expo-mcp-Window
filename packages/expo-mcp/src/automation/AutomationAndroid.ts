@@ -1,9 +1,9 @@
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseString } from 'xml2js';
 import { tmpfile } from 'zx';
 
-import { execSync } from 'node:child_process';
 import { cropImageAsync } from '../imageUtils.js';
 import {
   type AutomationConstructorParamsBase,
@@ -303,5 +303,108 @@ export class AutomationAndroid implements IAutomation {
       package: attrs.package || '',
       exists: true,
     };
+  }
+
+  async swipeAsync({
+    startX,
+    startY,
+    endX,
+    endY,
+  }: {
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+  }): Promise<AutomationResult<{ startX: number; startY: number; endX: number; endY: number }>> {
+    const startTime = Date.now();
+    try {
+      await this.runAdbCommand([
+        'shell',
+        'input',
+        'swipe',
+        String(startX),
+        String(startY),
+        String(endX),
+        String(endY),
+        '300',
+      ]);
+      return {
+        success: true,
+        duration: Date.now() - startTime,
+        data: { startX, startY, endX, endY },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        duration: Date.now() - startTime,
+        data: { startX, startY, endX, endY },
+      };
+    }
+  }
+
+  async scrollAsync(options: {
+    direction: 'up' | 'down' | 'left' | 'right';
+    distance?: number;
+  }): Promise<AutomationResult<{ direction: string; distance: number }>> {
+    const { direction, distance = 1000 } = options;
+    const startTime = Date.now();
+    try {
+      await this.runAdbCommand(['shell', 'input', 'swipe', '500', '1000', '500', '1000']);
+      return {
+        success: true,
+        duration: Date.now() - startTime,
+        data: { direction, distance },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        duration: Date.now() - startTime,
+        data: { direction, distance },
+      };
+    }
+  }
+
+  async typeTextAsync(text: string): Promise<AutomationResult<{ text: string }>> {
+    const startTime = Date.now();
+    try {
+      const cleanText = text.replace(/(\r\n|\n|\r)/gm, '');
+      for (const char of cleanText) {
+        await this.runAdbCommand(['shell', 'text', char]);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return {
+        success: true,
+        duration: Date.now() - startTime,
+        data: { text: cleanText },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        duration: Date.now() - startTime,
+        data: { text },
+      };
+    }
+  }
+
+  async pressKeyAsync(key: string): Promise<AutomationResult<{ key: string }>> {
+    const startTime = Date.now();
+    try {
+      await this.runAdbCommand(['shell', 'input', key]);
+      return {
+        success: true,
+        duration: Date.now() - startTime,
+        data: { key },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        duration: Date.now() - startTime,
+        data: { key },
+      };
+    }
   }
 }
