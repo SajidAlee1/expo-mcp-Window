@@ -221,7 +221,7 @@ describe('streamProcessOutput', () => {
 
   it('should reject when stdout is not available', async () => {
     const { processPromise } = createMockProcessPromise();
-    processPromise.stdout = null as any;
+    Object.defineProperty(processPromise, 'stdout', { value: null, writable: true, configurable: true });
 
     const promise = streamProcessOutput(processPromise, {
       durationMs: 1000,
@@ -236,7 +236,7 @@ describe('streamProcessOutput', () => {
 
   it('should reject when stderr is not available', async () => {
     const { processPromise } = createMockProcessPromise();
-    processPromise.stderr = null as any;
+    Object.defineProperty(processPromise, 'stderr', { value: null, writable: true, configurable: true });
 
     const promise = streamProcessOutput(processPromise, {
       durationMs: 1000,
@@ -251,7 +251,7 @@ describe('streamProcessOutput', () => {
 
   it('should reject when child process handle is not available', async () => {
     const { processPromise, stdout, stderr } = createMockProcessPromise();
-    processPromise.child = null as any;
+    Object.defineProperty(processPromise, 'child', { value: null, writable: true, configurable: true });
 
     const promise = streamProcessOutput(processPromise, {
       durationMs: 1000,

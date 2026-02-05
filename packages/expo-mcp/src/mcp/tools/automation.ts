@@ -1,9 +1,8 @@
 import { type McpServerProxy } from '@expo/mcp-tunnel';
-import fs from 'node:fs';
+import fs, { appendFileSync } from 'node:fs';
 import { z } from 'zod';
 import { tmpfile } from 'zx';
 
-import { appendFileSync } from 'node:fs';
 import type { IAutomation } from '../../automation/Automation.types.js';
 import { AutomationFactory } from '../../automation/AutomationFactory.js';
 import { resizeImageToMaxSizeAsync } from '../../imageUtils.js';

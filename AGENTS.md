@@ -279,3 +279,26 @@ packages/mcp-tunnel/src/
 - Run `bun run typecheck` to catch TypeScript errors
 - Run `bun run lint` to catch linting issues
 - Run tests before committing
+
+## MCP Tools Documentation
+
+### Automation Tools
+The automation tools enable interaction with mobile devices and apps:
+
+**Existing Tools:**
+- `automation_tap` - Tap at coordinates or by testID
+- `automation_take_screenshot` - Full device screenshots or view-specific screenshots
+- `automation_find_view_by_testid` - Find and inspect view properties
+- `automation_tap_by_testid` - Tap on views using testID
+- `automation_take_screenshot_by_testid` - Screenshot specific views
+
+**New Gesture Tools:**
+- `automation_swipe` - Swipe from one coordinate to another (x1,y1 → x2,y2)
+- `automation_scroll` - Scroll in any direction (up, down, left, right)
+- `automation_type_text` - Type text on the device keyboard
+- `automation_press_key` - Press device keys (enter, back, home, menu, delete, space, arrow keys)
+
+**Dev Server Tools:**
+- `open_devtools` - Open React Native DevTools
+- `collect_app_logs` - Collect logs from native device or JS console
+- `expo_router_sitemap` - Query expo-router sitemap (requires expo-router library)

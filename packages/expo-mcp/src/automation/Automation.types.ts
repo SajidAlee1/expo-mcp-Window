@@ -26,4 +26,32 @@ export interface IAutomation {
     testID: string;
     outputPath: string;
   }): Promise<string>;
+
+  swipeAsync({
+    startX,
+    startY,
+    endX,
+    endY,
+  }: {
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+  }): Promise<AutomationResult<any>>;
+
+  scrollAsync(options: {
+    direction: 'up' | 'down' | 'left' | 'right';
+    distance?: number;
+  }): Promise<AutomationResult<any>>;
+
+  typeTextAsync(text: string): Promise<AutomationResult<any>>;
+
+  pressKeyAsync(key: string): Promise<AutomationResult<any>>;
 }
+
+export type AutomationContext = {
+  automation: IAutomation;
+  platform: 'android' | 'ios';
+  deviceId: string;
+  appId: string;
+};

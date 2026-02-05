@@ -7,6 +7,22 @@ import { createLogCollector } from '../develop/LogCollectorFactory.js';
 import { findDevServerUrlAsync, openDevtoolsAsync } from '../develop/devtools.js';
 import { isExpoRouterProject } from '../project.js';
 import { addAutomationTools } from './tools/automation.js';
+import { AutomationContext } from '../automation/Automation.types.js';
+
+async function getAutomationContext(
+  projectRoot: string,
+  platformParam?: 'android' | 'ios'
+): Promise<AutomationContext> {
+  const platform = platformParam ?? (await AutomationFactory.guessCurrentPlatformAsync());
+
+  const deviceId = await AutomationFactory.getBootedDeviceIdAsync(platform);
+
+  const appId = await AutomationFactory.getAppIdAsync({ projectRoot, platform, deviceId });
+
+  const automation = AutomationFactory.create(platform, { appId, deviceId });
+
+  return { automation, platform, deviceId, appId };
+}
 
 export function addMcpTools(server: McpServerProxy, projectRoot: string) {
   const isRouterProject = isExpoRouterProject(projectRoot);
@@ -142,4 +158,93 @@ export function addMcpTools(server: McpServerProxy, projectRoot: string) {
   );
 
   addAutomationTools(server, projectRoot);
+
+  server.registerTool(
+    'automation_swipe',
+    {
+      title: 'Swipe on device',
+      description: 'Swipe from one coordinate to another on the device',
+      inputSchema: {
+        projectRoot: z.string(),
+        platform: z.enum(['android', 'ios']).optional(),
+        startX: z.number().describe('Start X coordinate'),
+        startY: z.number().describe('Start Y coordinate'),
+        endX: z.number().describe('End X coordinate'),
+        endY: z.number().describe('End Y coordinate'),
+      },
+    },
+    async ({ projectRoot, platform, startX, startY, endX, endY }) => {
+      const { automation } = await getAutomationContext(projectRoot, platform);
+      const result = await automation.swipeAsync({ startX, startY, endX, endY });
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    }
+  );
+
+  server.registerTool(
+    'automation_scroll',
+    {
+      title: 'Scroll on device',
+      description: 'Scroll in a specific direction on the device',
+      inputSchema: {
+        projectRoot: z.string(),
+        platform: z.enum(['android', 'ios']).optional(),
+        direction: z.enum(['up', 'down', 'left', 'right']).describe('Scroll direction'),
+        distance: z.number().optional().describe('Scroll distance in pixels (default: 1000)'),
+      },
+    },
+    async ({ projectRoot, platform, direction, distance }) => {
+      const { automation } = await getAutomationContext(projectRoot, platform);
+      const result = await automation.scrollAsync({ direction, distance });
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    }
+  );
+
+  server.registerTool(
+    'automation_type_text',
+    {
+      title: 'Type text on device',
+      description: 'Type text on the device keyboard',
+      inputSchema: {
+        projectRoot: z.string(),
+        platform: z.enum(['android', 'ios']).optional(),
+        text: z.string().describe('Text to type'),
+      },
+    },
+    async ({ projectRoot, platform, text }) => {
+      const { automation } = await getAutomationContext(projectRoot, platform);
+      const result = await automation.typeTextAsync(text);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    }
+  );
+
+  server.registerTool(
+    'automation_press_key',
+    {
+      title: 'Press key on device',
+      description: 'Press a key on the device',
+      inputSchema: {
+        projectRoot: z.string(),
+        platform: z.enum(['android', 'ios']).optional(),
+        key: z
+          .enum([
+            'enter',
+            'back',
+            'home',
+            'menu',
+            'delete',
+            'space',
+            'arrow_left',
+            'arrow_right',
+            'arrow_up',
+            'arrow_down',
+          ])
+          .describe('Key to press'),
+      },
+    },
+    async ({ projectRoot, platform, key }) => {
+      const { automation } = await getAutomationContext(projectRoot, platform);
+      const result = await automation.pressKeyAsync(key);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    }
+  );
 }

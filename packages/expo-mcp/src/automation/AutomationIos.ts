@@ -215,6 +215,53 @@ export class AutomationIos implements IAutomation {
 
     return { stdout: procResult.stdout, stderr: procResult.stderr };
   }
+
+  async swipeAsync({
+    startX,
+    startY,
+    endX,
+    endY,
+  }: {
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+  }): Promise<AutomationResult<{ startX: number; startY: number; endX: number; endY: number }>> {
+    return this.withXCTestRun(() => ({
+      ACTION: 'swipe',
+      X1: String(startX),
+      Y1: String(startY),
+      X2: String(endX),
+      Y2: String(endY),
+    }));
+  }
+
+  async scrollAsync(options: {
+    direction: 'up' | 'down' | 'left' | 'right';
+    distance?: number;
+  }): Promise<AutomationResult<{ direction: string; distance: number }>> {
+    const { direction, distance = 1000 } = options;
+    return this.withXCTestRun(() => ({
+      ACTION: 'scroll',
+      DIRECTION: direction.toUpperCase(),
+      DISTANCE: String(distance),
+    }));
+  }
+
+  async typeTextAsync(text: string): Promise<AutomationResult<{ text: string }>> {
+    const cleanText = text.replace(/(\r\n|\n|\r)/gm, '');
+    return this.withXCTestRun(() => ({
+      ACTION: 'type',
+      TEXT: cleanText,
+    }));
+  }
+
+  async pressKeyAsync(key: string): Promise<AutomationResult<{ key: string }>> {
+    return this.withXCTestRun(() => ({
+      ACTION: 'pressKey',
+      KEY: key.toUpperCase(),
+    }));
+  }
 }
 
 async function getFileStatAsync(filePath: string): Promise<fs.Stats | null> {
