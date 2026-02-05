@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
-import { $, within } from 'zx';
 import { appendFileSync } from 'node:fs';
+import { $, within } from 'zx';
 
 // Debug logger to file (won't crash MCP)
 function debugLog(message: string, data?: any) {
@@ -111,7 +111,11 @@ export async function getAndroidBundleIdentifierAsync({
     $.cwd = projectRoot;
     debugLog('Running: npx expo config --type public --json');
     const { stdout, exitCode } = await $`npx expo config --type public --json`.nothrow();
-    debugLog('Expo config result', { exitCode, stdoutLength: stdout?.length || 0, stdoutPreview: stdout?.substring(0, 100) });
+    debugLog('Expo config result', {
+      exitCode,
+      stdoutLength: stdout?.length || 0,
+      stdoutPreview: stdout?.substring(0, 100),
+    });
 
     if (!stdout || stdout.trim().length === 0) {
       debugLog('Expo config returned empty output');
@@ -123,7 +127,10 @@ export async function getAndroidBundleIdentifierAsync({
       debugLog('Parsed config android.package', config.android?.package);
       return config.android.package ?? null;
     } catch (error: any) {
-      debugLog('Failed to parse Expo config as JSON', { error: error.message, stdout: stdout.substring(0, 200) });
+      debugLog('Failed to parse Expo config as JSON', {
+        error: error.message,
+        stdout: stdout.substring(0, 200),
+      });
       return null;
     }
   });
