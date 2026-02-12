@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process';
-
+import { ExpoServerConfig } from '../types.js';
 import { ExpoError, handleCliError } from './errors.js';
-import { type ExpoServerConfig } from './types.js';
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
 
@@ -51,7 +50,7 @@ async function runCliCommand(
 
   return await new Promise<string>((resolve, reject) => {
     const child = spawn(command, args, {
-      cwd: options?.cwd,
+      cwd: options?.cwd ?? process.cwd(),
       env: {
         ...process.env,
         ...(options?.env ?? {}),
@@ -110,6 +109,9 @@ async function runCliCommand(
   });
 }
 
+/**
+ * Executes Expo CLI commands with proper environment configuration
+ */
 export async function executeExpoCommand(
   args: string[],
   config?: ExpoServerConfig,
@@ -123,6 +125,9 @@ export async function executeExpoCommand(
   }
 }
 
+/**
+ * Executes EAS CLI commands with proper environment configuration
+ */
 export async function executeEasCommand(
   args: string[],
   config?: ExpoServerConfig,
@@ -134,6 +139,7 @@ export async function executeEasCommand(
     if (!easArgs.includes('--non-interactive')) {
       easArgs.push('--non-interactive');
     }
+
     return await runCliCommand(getNpxCommand(), ['eas-cli', ...easArgs], {
       cwd,
       env: { EXPO_TOKEN: expoToken },
@@ -143,6 +149,9 @@ export async function executeEasCommand(
   }
 }
 
+/**
+ * Checks if a command is available in the system
+ */
 export async function checkCommandAvailable(command: string): Promise<boolean> {
   try {
     const probeCommand = process.platform === 'win32' ? 'where' : 'which';

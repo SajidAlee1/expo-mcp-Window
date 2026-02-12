@@ -1,7 +1,6 @@
-import process from 'node:process';
-
 import { type Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { type JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
+import process from 'node:process';
 
 type FramingMode = 'content-length' | 'newline';
 
@@ -22,7 +21,10 @@ export class CompatStdioServerTransport implements Transport {
   private framingMode?: FramingMode;
   private buffer = Buffer.alloc(0);
 
-  constructor(stdin: NodeJS.ReadStream = process.stdin, stdout: NodeJS.WriteStream = process.stdout) {
+  constructor(
+    stdin: NodeJS.ReadStream = process.stdin,
+    stdout: NodeJS.WriteStream = process.stdout
+  ) {
     this.stdin = stdin;
     this.stdout = stdout;
   }
