@@ -2,12 +2,20 @@ import { type McpServerProxy } from '@expo/mcp-tunnel';
 import { z } from 'zod';
 import { $, within } from 'zx';
 
+import { AutomationContext } from '../automation/Automation.types.js';
 import { AutomationFactory } from '../automation/AutomationFactory.js';
 import { createLogCollector } from '../develop/LogCollectorFactory.js';
 import { findDevServerUrlAsync, openDevtoolsAsync } from '../develop/devtools.js';
 import { isExpoRouterProject } from '../project.js';
+import { type ExpoServerConfig } from './expo-utils/types.js';
 import { addAutomationTools } from './tools/automation.js';
-import { AutomationContext } from '../automation/Automation.types.js';
+import { registerBuildTools } from './tools/expo/build.js';
+import { registerDevelopmentTools } from './tools/expo/development.js';
+import { registerInfoTools } from './tools/expo/info.js';
+import { registerProjectTools } from './tools/expo/project.js';
+import { registerSubmitTools } from './tools/expo/submit.js';
+import { registerUpdateTools } from './tools/expo/update.js';
+import { addExpoDocsResources, addExpoDocsTools } from './tools/expoDocs.js';
 
 async function getAutomationContext(
   projectRoot: string,
@@ -25,6 +33,21 @@ async function getAutomationContext(
 }
 
 export function addMcpTools(server: McpServerProxy, projectRoot: string) {
+  const expoToolConfig: ExpoServerConfig = {
+    defaultFormat: 'markdown',
+    expoToken: process.env.EXPO_TOKEN,
+  };
+
+  registerProjectTools(server, expoToolConfig);
+  registerDevelopmentTools(server, expoToolConfig);
+  registerBuildTools(server, expoToolConfig);
+  registerUpdateTools(server, expoToolConfig);
+  registerSubmitTools(server, expoToolConfig);
+  registerInfoTools(server, expoToolConfig);
+
+  addExpoDocsTools(server);
+  addExpoDocsResources(server);
+
   const isRouterProject = isExpoRouterProject(projectRoot);
   if (isRouterProject) {
     server.registerTool(

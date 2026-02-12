@@ -1,18 +1,11 @@
 import { type McpServerProxy } from '@expo/mcp-tunnel';
-import fs, { appendFileSync } from 'node:fs';
+import fs from 'node:fs';
 import { z } from 'zod';
 import { tmpfile } from 'zx';
 
 import type { IAutomation } from '../../automation/Automation.types.js';
 import { AutomationFactory } from '../../automation/AutomationFactory.js';
 import { resizeImageToMaxSizeAsync } from '../../imageUtils.js';
-
-// Debug logger
-function debugLog(message: string, data?: any) {
-  const timestamp = new Date().toISOString();
-  const logMessage = `[${timestamp}] ${message}${data ? ': ' + JSON.stringify(data) : ''}\n`;
-  appendFileSync('D:\\expo-mcp-demo\\mcp-debug.log', logMessage);
-}
 
 type AutomationContext = {
   automation: IAutomation;
@@ -25,21 +18,42 @@ async function getAutomationContext(
   projectRoot: string,
   platformParam?: 'android' | 'ios'
 ): Promise<AutomationContext> {
-  debugLog('getAutomationContext called', { projectRoot, platformParam });
-
   const platform = platformParam ?? (await AutomationFactory.guessCurrentPlatformAsync());
-  debugLog('Platform determined', platform);
-
   const deviceId = await AutomationFactory.getBootedDeviceIdAsync(platform);
-  debugLog('Device ID obtained', deviceId);
-
   const appId = await AutomationFactory.getAppIdAsync({ projectRoot, platform, deviceId });
-  debugLog('App ID obtained', appId);
-
   const automation = AutomationFactory.create(platform, { appId, deviceId });
-  debugLog('Automation created', { platform, appId, deviceId });
 
   return { automation, platform, deviceId, appId };
+}
+
+async function createScreenshotResponse({
+  projectRoot,
+  platform,
+  testID,
+}: {
+  projectRoot: string;
+  platform?: 'android' | 'ios';
+  testID?: string;
+}) {
+  const { automation } = await getAutomationContext(projectRoot, platform);
+  const outputPath = `${tmpfile()}.png`;
+
+  try {
+    if (testID) {
+      await automation.taksScreenshotByTestIDAsync({ testID, outputPath });
+    } else {
+      await automation.takeFullScreenshotAsync({ outputPath });
+    }
+
+    const { buffer } = await resizeImageToMaxSizeAsync(outputPath);
+    return {
+      content: [
+        { type: 'image' as const, data: buffer.toString('base64'), mimeType: 'image/jpeg' },
+      ],
+    };
+  } finally {
+    await fs.promises.rm(outputPath, { force: true });
+  }
 }
 
 export function addAutomationTools(server: McpServerProxy, projectRoot: string) {
@@ -84,6 +98,24 @@ export function addAutomationTools(server: McpServerProxy, projectRoot: string) 
   );
 
   server.registerTool(
+    'automation_tap_by_testid',
+    {
+      title: 'Tap by testID',
+      description: 'Tap on the device by React Native testID',
+      inputSchema: {
+        projectRoot: z.string(),
+        platform: z.enum(['android', 'ios']).optional(),
+        testID: z.string().describe('React Native testID of the view to tap'),
+      },
+    },
+    async ({ projectRoot, platform, testID }) => {
+      const { automation } = await getAutomationContext(projectRoot, platform);
+      const result = await automation.tapByTestIDAsync(testID);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    }
+  );
+
+  server.registerTool(
     'automation_take_screenshot',
     {
       title: 'Take screenshot of the app',
@@ -100,43 +132,23 @@ export function addAutomationTools(server: McpServerProxy, projectRoot: string) 
           ),
       },
     },
-    async ({ projectRoot, platform, testID }) => {
-      debugLog('automation_take_screenshot called', { projectRoot, platform, testID });
+    ({ projectRoot, platform, testID }) =>
+      createScreenshotResponse({ projectRoot, platform, testID })
+  );
 
-      const { automation } = await getAutomationContext(projectRoot, platform);
-      debugLog('Automation context obtained');
-
-      const outputPath = `${tmpfile()}.png`;
-      debugLog('Output path', outputPath);
-
-      try {
-        debugLog('Taking screenshot...');
-        if (testID) {
-          await automation.taksScreenshotByTestIDAsync({ testID, outputPath });
-        } else {
-          await automation.takeFullScreenshotAsync({ outputPath });
-        }
-        debugLog('Screenshot taken successfully');
-
-        debugLog('Resizing image...');
-        const { buffer } = await resizeImageToMaxSizeAsync(outputPath);
-        debugLog('Image resized, buffer size', buffer.length);
-
-        const result = {
-          content: [
-            { type: 'image' as const, data: buffer.toString('base64'), mimeType: 'image/jpeg' },
-          ],
-        };
-        debugLog('Returning result');
-        return result;
-      } catch (error: any) {
-        debugLog('Screenshot error', { message: error.message, stack: error.stack });
-        throw error;
-      } finally {
-        await fs.promises.rm(outputPath, { force: true });
-        debugLog('Cleanup done');
-      }
-    }
+  server.registerTool(
+    'automation_take_screenshot_by_testid',
+    {
+      title: 'Take screenshot by testID',
+      description: 'Take screenshot of a specific view by React Native testID',
+      inputSchema: {
+        projectRoot: z.string(),
+        platform: z.enum(['android', 'ios']).optional(),
+        testID: z.string().describe('React Native testID of the view to screenshot'),
+      },
+    },
+    async ({ projectRoot, platform, testID }) =>
+      createScreenshotResponse({ projectRoot, platform, testID })
   );
 
   server.registerTool(
@@ -145,6 +157,24 @@ export function addAutomationTools(server: McpServerProxy, projectRoot: string) 
       title: 'Find view properties',
       description:
         'Find view and dump its properties. This is useful to verify the view is rendered correctly',
+      inputSchema: {
+        projectRoot: z.string(),
+        platform: z.enum(['android', 'ios']).optional(),
+        testID: z.string().describe('React Native testID of the view to inspect'),
+      },
+    },
+    async ({ projectRoot, platform, testID }) => {
+      const { automation } = await getAutomationContext(projectRoot, platform);
+      const result = await automation.findViewByTestIDAsync(testID);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    }
+  );
+
+  server.registerTool(
+    'automation_find_view_by_testid',
+    {
+      title: 'Find view by testID',
+      description: 'Find a view by React Native testID and dump its properties',
       inputSchema: {
         projectRoot: z.string(),
         platform: z.enum(['android', 'ios']).optional(),

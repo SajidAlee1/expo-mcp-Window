@@ -1,35 +1,71 @@
-import { $ } from 'zx';
-
 /**
  * Find the URL of the Expo dev server for the given project root.
  */
-export async function findDevServerUrlAsync(projectRoot: string): Promise<URL | null> {
-  const lsofOutput = await $`lsof -i TCP -s TCP:LISTEN -n -P | grep node`;
-  const lines = lsofOutput.stdout.trim().split('\n');
+export async function findDevServerUrlAsync(_projectRoot: string): Promise<URL | null> {
+  // Kept for API compatibility; currently not required by probing strategy.
 
-  for (const line of lines) {
-    const parts = line.trim().split(/\s+/);
-    const pid = parts[1];
-    const portInfo = parts[8]; // Usually in format *:PORT
-
-    const { exitCode } = await $`lsof -P -n -p ${pid} | grep 'cwd.*${projectRoot}'`
-      .nothrow()
-      .quiet();
-    if (exitCode !== 0) {
-      continue;
-    }
-
-    const psOutput = await $`ps -p ${pid} -o args=`;
-    const command = psOutput.stdout.trim();
-
-    if (command.includes('expo start')) {
-      const portMatch = portInfo.match(/:(\d+)/);
-      if (portMatch) {
-        return new URL(`http://localhost:${portMatch[1]}`);
-      }
+  const envUrl = process.env.EXPO_DEV_SERVER_URL;
+  if (envUrl) {
+    try {
+      return new URL(envUrl);
+    } catch {
+      // Ignore invalid EXPO_DEV_SERVER_URL and continue probing.
     }
   }
+
+  const envPorts = [process.env.EXPO_DEV_SERVER_PORT, process.env.RCT_METRO_PORT]
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value > 0) as number[];
+
+  const candidatePorts = Array.from(new Set([...envPorts, 8081, 8082, 19000, 19001, 19006]));
+
+  for (const port of candidatePorts) {
+    const candidate = new URL(`http://127.0.0.1:${port}/`);
+    if (await isExpoOrMetroServerAsync(candidate)) {
+      return candidate;
+    }
+  }
+
   return null;
+}
+
+async function isExpoOrMetroServerAsync(baseUrl: URL): Promise<boolean> {
+  const statusText = await fetchTextAsync(new URL('status', baseUrl));
+  if (statusText && statusText.toLowerCase().includes('packager-status:running')) {
+    return true;
+  }
+
+  const jsonListText = await fetchTextAsync(new URL('json/list', baseUrl));
+  if (jsonListText) {
+    try {
+      const parsed = JSON.parse(jsonListText);
+      if (Array.isArray(parsed)) {
+        return true;
+      }
+    } catch {
+      // Ignore parse failures; try other probes.
+    }
+  }
+
+  return false;
+}
+
+async function fetchTextAsync(url: URL, timeoutMs = 400): Promise<string | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      return null;
+    }
+    return await response.text();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /**
@@ -42,7 +78,10 @@ export async function openDevtoolsAsync({
   appId: string;
   devServerUrl: URL;
 }): Promise<void> {
-  await fetch(`${devServerUrl.toString()}_expo/debugger?appId=${appId}`, {
+  const debuggerUrl = new URL('_expo/debugger', devServerUrl);
+  debuggerUrl.searchParams.set('appId', appId);
+
+  await fetch(debuggerUrl, {
     method: 'PUT',
   });
 }

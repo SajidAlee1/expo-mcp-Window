@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseString } from 'xml2js';
@@ -44,6 +44,19 @@ interface ElementProperties {
   package: string;
   exists: boolean;
 }
+
+const KEY_EVENT_BY_NAME: Record<string, number> = {
+  arrow_down: 20,
+  arrow_left: 21,
+  arrow_right: 22,
+  arrow_up: 19,
+  back: 4,
+  delete: 67,
+  enter: 66,
+  home: 3,
+  menu: 82,
+  space: 62,
+};
 
 export class AutomationAndroid implements IAutomation {
   private readonly appId: string;
@@ -189,7 +202,7 @@ export class AutomationAndroid implements IAutomation {
   private sanityCheckAsync(): void {
     try {
       const adbPath = getAdbPath();
-      execSync(`"${adbPath}" version`, { encoding: 'utf-8', windowsHide: true });
+      execFileSync(adbPath, ['version'], { encoding: 'utf-8', windowsHide: true });
     } catch (error: unknown) {
       throw new Error(`ADB is not installed: ${error}`);
     }
@@ -197,16 +210,18 @@ export class AutomationAndroid implements IAutomation {
 
   private runAdbCommand(args: string[]): string {
     const adbPath = getAdbPath();
-    const command = `"${adbPath}" -s ${this.deviceId} ${args.join(' ')}`;
     try {
-      const stdout = execSync(command, {
+      const stdout = execFileSync(adbPath, ['-s', this.deviceId, ...args], {
         encoding: 'utf-8',
         windowsHide: true,
         maxBuffer: 50 * 1024 * 1024, // 50MB for large outputs
       });
       return stdout;
     } catch (error: any) {
-      throw new Error(`ADB command failed: ${command}. Error: ${error.message}`);
+      const stderr = error?.stderr?.toString?.() ?? '';
+      throw new Error(
+        `ADB command failed: ${adbPath} -s ${this.deviceId} ${args.join(' ')}. Error: ${stderr || error.message}`
+      );
     }
   }
 
@@ -350,11 +365,27 @@ export class AutomationAndroid implements IAutomation {
     const { direction, distance = 1000 } = options;
     const startTime = Date.now();
     try {
-      await this.runAdbCommand(['shell', 'input', 'swipe', '500', '1000', '500', '1000']);
+      const {
+        startX,
+        startY,
+        endX,
+        endY,
+        distance: appliedDistance,
+      } = this.getScrollSwipeCoordinates(direction, distance);
+      await this.runAdbCommand([
+        'shell',
+        'input',
+        'swipe',
+        String(startX),
+        String(startY),
+        String(endX),
+        String(endY),
+        '300',
+      ]);
       return {
         success: true,
         duration: Date.now() - startTime,
-        data: { direction, distance },
+        data: { direction, distance: appliedDistance },
       };
     } catch (error) {
       return {
@@ -369,10 +400,9 @@ export class AutomationAndroid implements IAutomation {
   async typeTextAsync(text: string): Promise<AutomationResult<{ text: string }>> {
     const startTime = Date.now();
     try {
-      const cleanText = text.replace(/(\r\n|\n|\r)/gm, '');
-      for (const char of cleanText) {
-        await this.runAdbCommand(['shell', 'text', char]);
-        await new Promise((resolve) => setTimeout(resolve, 50));
+      const cleanText = text.replace(/(\r\n|\n|\r)/gm, ' ');
+      if (cleanText) {
+        await this.runAdbCommand(['shell', 'input', 'text', this.escapeTextForAdbInput(cleanText)]);
       }
       return {
         success: true,
@@ -392,7 +422,11 @@ export class AutomationAndroid implements IAutomation {
   async pressKeyAsync(key: string): Promise<AutomationResult<{ key: string }>> {
     const startTime = Date.now();
     try {
-      await this.runAdbCommand(['shell', 'input', key]);
+      const keyEvent = KEY_EVENT_BY_NAME[key];
+      if (!keyEvent) {
+        throw new Error(`Unsupported key: ${key}`);
+      }
+      await this.runAdbCommand(['shell', 'input', 'keyevent', String(keyEvent)]);
       return {
         success: true,
         duration: Date.now() - startTime,
@@ -406,5 +440,88 @@ export class AutomationAndroid implements IAutomation {
         data: { key },
       };
     }
+  }
+
+  private getDisplaySize(): { width: number; height: number } {
+    const wmSizeOutput = this.runAdbCommand(['shell', 'wm', 'size']);
+    const sizeMatch = wmSizeOutput.match(/(\d+)x(\d+)/);
+    if (!sizeMatch) {
+      throw new Error(`Failed to parse display size from: ${wmSizeOutput}`);
+    }
+
+    const width = Number(sizeMatch[1]);
+    const height = Number(sizeMatch[2]);
+    return { width, height };
+  }
+
+  private getScrollSwipeCoordinates(
+    direction: 'up' | 'down' | 'left' | 'right',
+    distance: number
+  ): {
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+    distance: number;
+  } {
+    const { width, height } = this.getDisplaySize();
+    const maxDistance = Math.floor(Math.min(width, height) * 0.8);
+    const minDistance = 50;
+    const safeDistance = Number.isFinite(distance) ? distance : 1000;
+    const clampedDistance = Math.min(Math.max(Math.floor(safeDistance), minDistance), maxDistance);
+    const halfDistance = Math.floor(clampedDistance / 2);
+    const centerX = Math.floor(width / 2);
+    const centerY = Math.floor(height / 2);
+
+    switch (direction) {
+      case 'up':
+        return {
+          startX: centerX,
+          startY: centerY + halfDistance,
+          endX: centerX,
+          endY: centerY - halfDistance,
+          distance: clampedDistance,
+        };
+      case 'down':
+        return {
+          startX: centerX,
+          startY: centerY - halfDistance,
+          endX: centerX,
+          endY: centerY + halfDistance,
+          distance: clampedDistance,
+        };
+      case 'left':
+        return {
+          startX: centerX + halfDistance,
+          startY: centerY,
+          endX: centerX - halfDistance,
+          endY: centerY,
+          distance: clampedDistance,
+        };
+      case 'right':
+        return {
+          startX: centerX - halfDistance,
+          startY: centerY,
+          endX: centerX + halfDistance,
+          endY: centerY,
+          distance: clampedDistance,
+        };
+      default:
+        return {
+          startX: centerX,
+          startY: centerY,
+          endX: centerX,
+          endY: centerY,
+          distance: clampedDistance,
+        };
+    }
+  }
+
+  private escapeTextForAdbInput(text: string): string {
+    return text
+      .replace(/ /g, '%s')
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/'/g, "\\'");
   }
 }

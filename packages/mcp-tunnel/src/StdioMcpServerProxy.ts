@@ -3,8 +3,8 @@ import {
   type ReadResourceCallback,
   type ReadResourceTemplateCallback,
 } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
+import { CompatStdioServerTransport } from './CompatStdioServerTransport.js';
 import { type McpServerProxy } from './types.js';
 
 /**
@@ -13,7 +13,7 @@ import { type McpServerProxy } from './types.js';
 export class StdioMcpServerProxy implements McpServerProxy {
   private readonly _devServerUrl: string;
   private readonly server;
-  private readonly transport = new StdioServerTransport();
+  private readonly transport = new CompatStdioServerTransport();
 
   constructor({
     devServerUrl,
